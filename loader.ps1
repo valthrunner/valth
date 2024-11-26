@@ -167,6 +167,15 @@ function Download-Artifact($artifactSlug, $artifactInfo) {
         $storedVersionHash = Get-Content -Path $versionFile -ErrorAction SilentlyContinue
     }
 
+    # Trim whitespace and convert to lower case for comparison
+    $storedVersionHash = $storedVersionHash.Trim().ToLower()
+    $versionHash = $versionHash.Trim().ToLower()
+
+    if ($debug_mode -eq 1) {
+        Write-Host "[DEBUG] Stored version hash for $artifactSlug: '$storedVersionHash'" -ForegroundColor Cyan
+        Write-Host "[DEBUG] Latest version hash for $artifactSlug: '$versionHash'" -ForegroundColor Cyan
+    }
+
     if ($storedVersionHash -ne $versionHash -or !(Test-Path $destinationFile)) {
         Write-Host "  Downloading $artifactSlug..." -ForegroundColor White
         LogMessage "Downloading $artifactSlug version $versionHash"
