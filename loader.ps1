@@ -154,11 +154,10 @@ function Get-LatestArtifactVersion($artifactSlug) {
 }
 
 # Function to download artifacts
-function Download-Artifact($artifactSlug, $artifactInfo) {
+function Download-Artifact($artifactSlug, $artifactInfo, $destinationFileName) {
     $downloadUrl = $artifactInfo.downloadUrl
     $versionHash = $artifactInfo.versionHash
-    $fileName = $artifactInfo.fileName
-    $destinationFile = Join-Path $scriptDir $fileName
+    $destinationFile = Join-Path $scriptDir $destinationFileName
 
     # Read stored version hash
     $versionFile = Join-Path $versionsDir "$artifactSlug.version"
@@ -179,7 +178,10 @@ function Download-Artifact($artifactSlug, $artifactInfo) {
     if ($storedVersionHash -ne $versionHash -or !(Test-Path $destinationFile)) {
         Write-Host "  Downloading $artifactSlug..." -ForegroundColor White
         LogMessage "Downloading $artifactSlug version $versionHash"
-        if ($debug_mode -eq 1) { Write-Host "[DEBUG] Downloading $artifactSlug from $downloadUrl" -ForegroundColor Cyan }
+        if ($debug_mode -eq 1) {
+            Write-Host "[DEBUG] Downloading $artifactSlug from $downloadUrl" -ForegroundColor Cyan
+            Write-Host "[DEBUG] Saving as $destinationFile" -ForegroundColor Cyan
+        }
         try {
             $client.DownloadFile($downloadUrl, $destinationFile)
             # Save versionHash
@@ -211,21 +213,6 @@ function DownloadAndExtractFiles {
     # List of artifacts to download
     $artifacts = @('driver-interface-kernel','cs2-overlay','kernel-driver')
 
-    # Hashtable to store artifactInfo
-    $artifactInfos = @{}
-
-    foreach ($artifactSlug in $artifacts) {
-        $artifactInfo = Get-LatestArtifactVersion $artifactSlug
-        if ($null -ne $artifactInfo) {
-            $artifactInfos[$artifactSlug] = $artifactInfo
-            Download-Artifact $artifactSlug $artifactInfo
-        } else {
-            Write-Host "Failed to get latest version info for $artifactSlug" -ForegroundColor Red
-            LogMessage "ERROR: Failed to get latest version info for $artifactSlug"
-            exit 1
-        }
-    }
-
     # Map artifact slugs to destination filenames
     $artifactFileNames = @{
         'driver-interface-kernel' = 'driver-interface-kernel.dll'
@@ -233,28 +220,15 @@ function DownloadAndExtractFiles {
         'kernel-driver' = 'valthrun-driver.sys'
     }
 
-    foreach ($artifactSlug in $artifacts) {
-        $artifactInfo = $artifactInfos[$artifactSlug]
-        if ($null -ne $artifactInfo) {
-            $downloadedFile = Join-Path $scriptDir $artifactInfo.fileName
-            $destinationFile = Join-Path $scriptDir $artifactFileNames[$artifactSlug]
+    # Hashtable to store artifactInfo
+    $artifactInfos = @{}
 
-            if (Test-Path $downloadedFile) {
-                # Move/Rename the file to the destination filename
-                try {
-                    Move-Item -Path $downloadedFile -Destination $destinationFile -Force
-                    LogMessage "Moved $downloadedFile to $destinationFile"
-                    if ($debug_mode -eq 1) { Write-Host "[DEBUG] Moved $downloadedFile to $destinationFile" -ForegroundColor Cyan }
-                } catch {
-                    Write-Host "  Error: Could not move $artifactSlug file" -ForegroundColor Red
-                    LogMessage "ERROR: Failed to move $artifactSlug file - $_"
-                    exit 1
-                }
-            } else {
-                Write-Host "Downloaded file $downloadedFile not found." -ForegroundColor Red
-                LogMessage "ERROR: Downloaded file $downloadedFile not found."
-                exit 1
-            }
+    foreach ($artifactSlug in $artifacts) {
+        $artifactInfo = Get-LatestArtifactVersion $artifactSlug
+        if ($null -ne $artifactInfo) {
+            $artifactInfos[$artifactSlug] = $artifactInfo
+            $destinationFileName = $artifactFileNames[$artifactSlug]
+            Download-Artifact $artifactSlug $artifactInfo $destinationFileName
         } else {
             Write-Host "Failed to get latest version info for $artifactSlug" -ForegroundColor Red
             LogMessage "ERROR: Failed to get latest version info for $artifactSlug"
