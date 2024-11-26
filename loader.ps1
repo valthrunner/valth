@@ -12,6 +12,12 @@ if (!(Test-Path $logDir)) {
     New-Item -ItemType Directory -Path $logDir | Out-Null
 }
 
+# Define the versions directory
+$versionsDir = Join-Path $scriptDir "versions"
+if (!(Test-Path $versionsDir)) {
+    New-Item -ItemType Directory -Path $versionsDir | Out-Null
+}
+
 # Initialize timestamp and define log file names
 $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
 $new_latest_log = "latest_script_$timestamp.log"
@@ -28,7 +34,7 @@ $logfile = Join-Path $logDir $new_latest_log
 
 # Initialize WebClient for faster downloads
 $client = New-Object System.Net.WebClient
-$client.Headers.Add("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36")
+$client.Headers.Add("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
 
 # Function to log messages
 function LogMessage($message) {
@@ -142,7 +148,7 @@ function Get-LatestArtifactVersion($artifactSlug) {
         }
     } catch {
         Write-Host "Error getting latest version for artifact ${artifactSlug}: $_" -ForegroundColor Red
-        LogMessage "ERROR: Error getting latest version for artifact $artifactSlug - $_"
+        LogMessage "ERROR: Error getting latest version for artifact ${artifactSlug} - $_"
         return $null
     }
 }
@@ -155,7 +161,7 @@ function Download-Artifact($artifactSlug, $artifactInfo) {
     $destinationFile = Join-Path $scriptDir $fileName
 
     # Read stored version hash
-    $versionFile = Join-Path $scriptDir "$artifactSlug.version"
+    $versionFile = Join-Path $versionsDir "$artifactSlug.version"
     $storedVersionHash = ""
     if (Test-Path $versionFile) {
         $storedVersionHash = Get-Content -Path $versionFile -ErrorAction SilentlyContinue
@@ -173,7 +179,7 @@ function Download-Artifact($artifactSlug, $artifactInfo) {
             LogMessage "Downloaded $artifactSlug successfully."
         } catch {
             Write-Host "  Failed to download ${artifactSlug}: $_" -ForegroundColor Red
-            LogMessage "ERROR: Failed to download $artifactSlug - $_"
+            LogMessage "ERROR: Failed to download ${artifactSlug} - $_"
             exit 1
         }
     } else {
@@ -281,7 +287,16 @@ function DownloadFile($url, $destination) {
 function MapDriver {
     if ($debug_mode -eq 1) { Write-Host "[DEBUG] Starting driver mapping process" -ForegroundColor Cyan }
     LogMessage "Starting driver mapping process"
-    $file = Join-Path $scriptDir "kdmapper_log.txt"
+
+    # Set up kdmapper log file in logs directory
+    $kdmapperLogFile = Join-Path $logDir "latest_kdmapper_$timestamp.log"
+
+    # Rename any existing latest_kdmapper_<timestamp>.log files to kdmapper_<timestamp>.log
+    Get-ChildItem -Path $logDir -Filter 'latest_kdmapper_*.log' | ForEach-Object {
+        $old_latest_log = $_.Name
+        $renamed_log = $old_latest_log -replace 'latest_', ''
+        Rename-Item -Path $_.FullName -NewName $renamed_log -ErrorAction SilentlyContinue
+    }
 
     Write-Host
     Write-Host "  Excluding kdmapper from Win Defender..." -ForegroundColor White
@@ -310,7 +325,7 @@ function MapDriver {
     LogMessage "Running kdmapper"
     if ($debug_mode -eq 1) { Write-Host "[DEBUG] Running kdmapper" -ForegroundColor Cyan }
     try {
-        Start-Process -FilePath (Join-Path $scriptDir "kdmapper.exe") -ArgumentList 'valthrun-driver.sys' -RedirectStandardOutput $file -NoNewWindow -Wait
+        Start-Process -FilePath (Join-Path $scriptDir "kdmapper.exe") -ArgumentList 'valthrun-driver.sys' -RedirectStandardOutput $kdmapperLogFile -NoNewWindow -Wait
         $kdmapper_error = 0
     } catch {
         $kdmapper_error = 1
@@ -328,14 +343,14 @@ function HandleKdmapperErrors {
     if ($debug_mode -eq 1) { Write-Host "[DEBUG] Checking kdmapper errors" -ForegroundColor Cyan }
     LogMessage "Checking kdmapper errors"
 
-    if (!(Test-Path $file)) {
-        Write-Host "  Error: kdmapper_log.txt not found." -ForegroundColor Red
-        LogMessage "ERROR: kdmapper_log.txt not found."
+    if (!(Test-Path $kdmapperLogFile)) {
+        Write-Host "  Error: kdmapper log file not found." -ForegroundColor Red
+        LogMessage "ERROR: kdmapper log file not found."
         Pause
         exit 1
     }
 
-    $fileContent = Get-Content -Path $file
+    $fileContent = Get-Content -Path $kdmapperLogFile
 
     if ($fileContent -match "\[+\] success") {
         LogMessage "Driver successfully loaded"
