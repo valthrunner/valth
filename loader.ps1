@@ -1,3 +1,5 @@
+Clear-Host
+
 # Define the script directory
 $scriptDir = Split-Path -Path $MyInvocation.MyCommand.Definition -Parent
 
