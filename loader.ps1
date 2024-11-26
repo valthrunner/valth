@@ -244,7 +244,10 @@ function DownloadAndExtractFiles {
 
     if ($debug_mode -eq 1) {
         Write-Host "[DEBUG] Final file verification:" -ForegroundColor Cyan
-        Get-ChildItem -Path $scriptDir -Filter 'controller.exe','valthrun-driver.sys','kdmapper.exe' | ForEach-Object { Write-Host $_.Name -ForegroundColor Green }
+        $files = 'controller.exe', 'valthrun-driver.sys', 'kdmapper.exe'
+        Get-ChildItem -Path $scriptDir | Where-Object { $files -contains $_.Name } | ForEach-Object {
+            Write-Host $_.Name -ForegroundColor Green
+        }
     }
     LogMessage "File download and processing completed"
 
