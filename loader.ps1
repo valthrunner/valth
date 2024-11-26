@@ -215,7 +215,7 @@ function DownloadAndExtractFiles {
 
     # Map artifact slugs to destination filenames
     $artifactFileNames = @{
-        'driver-interface-kernel' = 'driver-interface-kernel.dll'
+        'driver-interface-kernel' = 'driver_interface_kernel.dll'
         'cs2-overlay' = 'controller.exe'
         'kernel-driver' = 'valthrun-driver.sys'
     }
