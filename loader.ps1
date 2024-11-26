@@ -47,7 +47,7 @@ LogMessage "Script started"
 LogMessage "----------------------------------------"
 
 # Define script title and set initial variables
-$script_version = "5.0"
+$script_version = "6.0"
 $default_title = "Valthrunner's Script v$script_version"
 $debug_mode = 0
 $mode = 0
