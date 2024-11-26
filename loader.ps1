@@ -104,7 +104,7 @@ function DisplayHeader {
     Write-Host "/" -ForegroundColor Red -NoNewLine 
     Write-Host "       ____        _      __" -ForegroundColor White
     Write-Host " | | / /__ _/ / /_/ /  ______ _____  ___  ___ ____  ___   / __/_______(_)__  / /_" -ForegroundColor White
-    Write-Host " | |/ / _ `' / __/ _ \/ __/ // / _ \/ _ \/ -_) __/ (_-<  _\ \/ __/ __/ / _ \/ __/" -ForegroundColor Yellow
+    Write-Host " | |/ / _ `'  / __/ _ \/ __/ // / _ \/ _ \/ -_) __/ (_-<  _\ \/ __/ __/ / _ \/ __/" -ForegroundColor Yellow
     Write-Host " |___/\_,_/_/\__/_//_/_/  \_,_/_//_/_//_/\__/_/   /___/ /___/\__/_/ /_/ ___/\__/" -ForegroundColor Red
     Write-Host "                                                                     /_/         " -ForegroundColor Red
 }
