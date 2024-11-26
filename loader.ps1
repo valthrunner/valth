@@ -211,9 +211,13 @@ function DownloadAndExtractFiles {
     # List of artifacts to download
     $artifacts = @('driver-interface-kernel','cs2-overlay','kernel-driver')
 
+    # Hashtable to store artifactInfo
+    $artifactInfos = @{}
+
     foreach ($artifactSlug in $artifacts) {
         $artifactInfo = Get-LatestArtifactVersion $artifactSlug
         if ($null -ne $artifactInfo) {
+            $artifactInfos[$artifactSlug] = $artifactInfo
             Download-Artifact $artifactSlug $artifactInfo
         } else {
             Write-Host "Failed to get latest version info for $artifactSlug" -ForegroundColor Red
@@ -230,7 +234,7 @@ function DownloadAndExtractFiles {
     }
 
     foreach ($artifactSlug in $artifacts) {
-        $artifactInfo = Get-LatestArtifactVersion $artifactSlug
+        $artifactInfo = $artifactInfos[$artifactSlug]
         if ($null -ne $artifactInfo) {
             $downloadedFile = Join-Path $scriptDir $artifactInfo.fileName
             $destinationFile = Join-Path $scriptDir $artifactFileNames[$artifactSlug]
