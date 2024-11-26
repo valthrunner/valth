@@ -141,7 +141,7 @@ function Get-LatestArtifactVersion($artifactSlug) {
             downloadUrl = "https://valth.run/api/artifacts/$artifactSlug/$trackId/$($latestVersion.id)/download"
         }
     } catch {
-        Write-Host "Error getting latest version for artifact $artifactSlug: $_" -ForegroundColor Red
+        Write-Host "Error getting latest version for artifact ${artifactSlug}: $_" -ForegroundColor Red
         LogMessage "ERROR: Error getting latest version for artifact $artifactSlug - $_"
         return $null
     }
@@ -172,7 +172,7 @@ function Download-Artifact($artifactSlug, $artifactInfo) {
             Write-Host "  Downloaded $artifactSlug successfully." -ForegroundColor Green
             LogMessage "Downloaded $artifactSlug successfully."
         } catch {
-            Write-Host "  Failed to download $artifactSlug: $_" -ForegroundColor Red
+            Write-Host "  Failed to download ${artifactSlug}: $_" -ForegroundColor Red
             LogMessage "ERROR: Failed to download $artifactSlug - $_"
             exit 1
         }
