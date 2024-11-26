@@ -119,11 +119,15 @@ function DownloadAndExtractFiles {
         Write-Host "[DEBUG] Script directory: $scriptDir" -ForegroundColor Cyan
     }
 
-    # Create a temporary directory for extraction
-    $temp_dir = Join-Path -Path $scriptDir -ChildPath "temp_extract"
-    LogMessage "Creating temporary directory: $temp_dir"
-    if ($debug_mode -eq 1) { Write-Host "[DEBUG] Creating temporary directory: $temp_dir" -ForegroundColor Cyan }
-    if (!(Test-Path $temp_dir)) { New-Item -ItemType Directory -Path $temp_dir | Out-Null }
+    # Use the existing 'temp' directory created by run.bat
+    $temp_dir = Join-Path -Path $scriptDir -ChildPath "temp"
+    LogMessage "Using temporary directory: $temp_dir"
+    if ($debug_mode -eq 1) { Write-Host "[DEBUG] Using temporary directory: $temp_dir" -ForegroundColor Cyan }
+    if (!(Test-Path $temp_dir)) { 
+        Write-Host "  Temporary directory does not exist. Creating..." -ForegroundColor Yellow
+        LogMessage "Temporary directory does not exist. Creating..."
+        New-Item -ItemType Directory -Path $temp_dir | Out-Null 
+    }
 
     # Download controller package
     Write-Host "  Downloading controller package..." -ForegroundColor White
@@ -209,9 +213,7 @@ function DownloadAndExtractFiles {
     }
     LogMessage "Driver extraction completed with error level: $extract_error"
     if ($extract_error -ne 0) {
-        if ($debug_mode -eq 1) {
-            Write-Host "[DEBUG] Driver extraction failed" -ForegroundColor Cyan
-        }
+        if ($debug_mode -eq 1) { Write-Host "[DEBUG] Driver extraction failed with error: $extract_error" -ForegroundColor Cyan }
         Write-Host "  Extraction failed: Driver package" -ForegroundColor Red
         Write-Host "  Try running the script as administrator." -ForegroundColor Red
         LogMessage "ERROR: Driver extraction failed"
@@ -470,7 +472,7 @@ function ApplyWin11Fix {
 
     # Disable Hypervisor
     try {
-        $currentSetting = (bcdedit /enum '{emssettings}' | Select-String 'hypervisorlaunchtype').ToString()
+        $currentSetting = (bcdedit /enum '{current}' | Select-String 'hypervisorlaunchtype').ToString()
         if ($currentSetting -notmatch 'off') {
             bcdedit /set hypervisorlaunchtype off | Out-Null
             $fixCount++
