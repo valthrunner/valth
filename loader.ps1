@@ -120,212 +120,128 @@ function DisplayHeader {
 
 DisplayHeader
 
-# Download and extract files
+# Function to get the latest artifact version
+function Get-LatestArtifactVersion($artifactSlug) {
+    if ($debug_mode -eq 1) { Write-Host "[DEBUG] Getting latest version info for artifact: $artifactSlug" -ForegroundColor Cyan }
+    try {
+        $artifactInfoUrl = "https://valth.run/api/artifacts/$artifactSlug"
+        $artifactInfo = Invoke-RestMethod -Uri $artifactInfoUrl
+        $trackId = $artifactInfo.artifact.defaultTrack
+        $versionsInfoUrl = "https://valth.run/api/artifacts/$artifactSlug/$trackId"
+        $versionsInfo = Invoke-RestMethod -Uri $versionsInfoUrl
+        $latestVersion = $versionsInfo.versions | Sort-Object -Property timestamp -Descending | Select-Object -First 1
+
+        return @{
+            versionId = $latestVersion.id
+            versionHash = $latestVersion.versionHash
+            fileName = $latestVersion.fileName
+            fileSize = $latestVersion.fileSize
+            fileExtension = $latestVersion.fileExtension
+            fileType = $latestVersion.fileType
+            downloadUrl = "https://valth.run/api/artifacts/$artifactSlug/$trackId/$($latestVersion.id)/download"
+        }
+    } catch {
+        Write-Host "Error getting latest version for artifact $artifactSlug: $_" -ForegroundColor Red
+        LogMessage "ERROR: Error getting latest version for artifact $artifactSlug - $_"
+        return $null
+    }
+}
+
+# Function to download artifacts
+function Download-Artifact($artifactSlug, $artifactInfo) {
+    $downloadUrl = $artifactInfo.downloadUrl
+    $versionHash = $artifactInfo.versionHash
+    $fileName = $artifactInfo.fileName
+    $destinationFile = Join-Path $scriptDir $fileName
+
+    # Read stored version hash
+    $versionFile = Join-Path $scriptDir "$artifactSlug.version"
+    $storedVersionHash = ""
+    if (Test-Path $versionFile) {
+        $storedVersionHash = Get-Content -Path $versionFile -ErrorAction SilentlyContinue
+    }
+
+    if ($storedVersionHash -ne $versionHash -or !(Test-Path $destinationFile)) {
+        Write-Host "  Downloading $artifactSlug..." -ForegroundColor White
+        LogMessage "Downloading $artifactSlug version $versionHash"
+        if ($debug_mode -eq 1) { Write-Host "[DEBUG] Downloading $artifactSlug from $downloadUrl" -ForegroundColor Cyan }
+        try {
+            $client.DownloadFile($downloadUrl, $destinationFile)
+            # Save versionHash
+            Set-Content -Path $versionFile -Value $versionHash
+            Write-Host "  Downloaded $artifactSlug successfully." -ForegroundColor Green
+            LogMessage "Downloaded $artifactSlug successfully."
+        } catch {
+            Write-Host "  Failed to download $artifactSlug: $_" -ForegroundColor Red
+            LogMessage "ERROR: Failed to download $artifactSlug - $_"
+            exit 1
+        }
+    } else {
+        Write-Host "  $artifactSlug is up to date." -ForegroundColor Green
+        LogMessage "$artifactSlug is up to date."
+    }
+}
+
+# Download and process artifacts
 function DownloadAndExtractFiles {
     Write-Host
     Write-Host "  Starting download process..." -ForegroundColor White
     LogMessage "Starting download process"
+
     if ($debug_mode -eq 1) {
         Write-Host "[DEBUG] Starting DownloadAndExtractFiles function" -ForegroundColor Cyan
         Write-Host "[DEBUG] Script directory: $scriptDir" -ForegroundColor Cyan
     }
 
-    # Use the existing 'temp' directory created by run.bat
-    $temp_dir = Join-Path -Path $scriptDir -ChildPath "temp"
-    LogMessage "Using temporary directory: $temp_dir"
-    if ($debug_mode -eq 1) { Write-Host "[DEBUG] Using temporary directory: $temp_dir" -ForegroundColor Cyan }
-    if (!(Test-Path $temp_dir)) { 
-        Write-Host "  Temporary directory does not exist. Creating..." -ForegroundColor Yellow
-        LogMessage "Temporary directory does not exist. Creating..."
-        New-Item -ItemType Directory -Path $temp_dir | Out-Null 
-    }
+    # List of artifacts to download
+    $artifacts = @('driver-interface-kernel','cs2-overlay','kernel-driver')
 
-    # Download controller package
-    Write-Host "  Downloading controller package..." -ForegroundColor White
-    LogMessage "Downloading controller package"
-    if ($debug_mode -eq 1) { Write-Host "[DEBUG] Downloading controller package from valth.run" -ForegroundColor Cyan }
-    try {
-        $controllerZipPath = Join-Path $temp_dir "valthrun_cs2.zip"
-        $client.DownloadFile("https://valth.run/download/cs2", $controllerZipPath)
-        $download_error = 0
-    } catch {
-        $download_error = 1
-    }
-    LogMessage "Controller package download completed with error level: $download_error"
-    if ($download_error -ne 0) {
-        if ($debug_mode -eq 1) { Write-Host "[DEBUG] Controller package download failed with error: $download_error" -ForegroundColor Cyan }
-        Write-Host "  Download failed: Controller package" -ForegroundColor Red
-        Write-Host "  Please check your internet connection and try again." -ForegroundColor Red
-        LogMessage "ERROR: Controller package download failed"
-        Remove-Item -Path $temp_dir -Recurse -Force -ErrorAction SilentlyContinue
-        exit 1
-    }
-
-    # Download driver package
-    Write-Host "  Downloading driver package..." -ForegroundColor White
-    LogMessage "Downloading driver package"
-    if ($debug_mode -eq 1) { Write-Host "[DEBUG] Downloading driver package from valth.run" -ForegroundColor Cyan }
-    try {
-        $driverZipPath = Join-Path $temp_dir "valthrun_driver_kernel.zip"
-        $client.DownloadFile("https://valth.run/download/driver-kernel", $driverZipPath)
-        $download_error = 0
-    } catch {
-        $download_error = 1
-    }
-    LogMessage "Driver package download completed with error level: $download_error"
-    if ($download_error -ne 0) {
-        if ($debug_mode -eq 1) { Write-Host "[DEBUG] Driver package download failed with error: $download_error" -ForegroundColor Cyan }
-        Write-Host "  Download failed: Driver package" -ForegroundColor Red
-        Write-Host "  Please check your internet connection and try again." -ForegroundColor Red
-        LogMessage "ERROR: Driver package download failed"
-        Remove-Item -Path $temp_dir -Recurse -Force -ErrorAction SilentlyContinue
-        exit 1
-    }
-
-    # Verify downloads
-    if ($debug_mode -eq 1) {
-        Write-Host "[DEBUG] Verifying downloaded files" -ForegroundColor Cyan
-        Get-ChildItem -Path $temp_dir | ForEach-Object { Write-Host $_.Name }
-    }
-    LogMessage "Downloads completed successfully"
-    Write-Host "  Downloads completed successfully." -ForegroundColor Green
-
-    # Extract controller package
-    Write-Host "  Extracting controller package..." -ForegroundColor White
-    LogMessage "Extracting controller package"
-    if ($debug_mode -eq 1) { Write-Host "[DEBUG] Extracting controller package" -ForegroundColor Cyan }
-    try {
-        Expand-Archive -LiteralPath $controllerZipPath -DestinationPath $temp_dir -Force
-        $extract_error = 0
-    } catch {
-        $extract_error = 1
-    }
-    LogMessage "Controller extraction completed with error level: $extract_error"
-    if ($extract_error -ne 0) {
-        if ($debug_mode -eq 1) {
-            Write-Host "[DEBUG] Controller extraction failed" -ForegroundColor Cyan
-        }
-        Write-Host "  Extraction failed: Controller package" -ForegroundColor Red
-        Write-Host "  Try running the script as administrator." -ForegroundColor Red
-        LogMessage "ERROR: Controller extraction failed"
-        Remove-Item -Path $temp_dir -Recurse -Force -ErrorAction SilentlyContinue
-        exit 1
-    }
-
-    # Extract driver package
-    Write-Host "  Extracting driver package..." -ForegroundColor White
-    LogMessage "Extracting driver package"
-    if ($debug_mode -eq 1) { Write-Host "[DEBUG] Extracting driver package" -ForegroundColor Cyan }
-    try {
-        Expand-Archive -LiteralPath $driverZipPath -DestinationPath $temp_dir -Force
-        $extract_error = 0
-    } catch {
-        $extract_error = 1
-    }
-    LogMessage "Driver extraction completed with error level: $extract_error"
-    if ($extract_error -ne 0) {
-        if ($debug_mode -eq 1) { Write-Host "[DEBUG] Driver extraction failed with error: $extract_error" -ForegroundColor Cyan }
-        Write-Host "  Extraction failed: Driver package" -ForegroundColor Red
-        Write-Host "  Try running the script as administrator." -ForegroundColor Red
-        LogMessage "ERROR: Driver extraction failed"
-        Remove-Item -Path $temp_dir -Recurse -Force -ErrorAction SilentlyContinue
-        exit 1
-    }
-
-    # Process files
-    Write-Host "  Processing files..." -ForegroundColor White
-    LogMessage "Processing extracted files"
-    if ($debug_mode -eq 1) { Write-Host "[DEBUG] Processing extracted files" -ForegroundColor Cyan }
-
-    Push-Location $temp_dir
-
-    # Rename controller
-    $controller_found = $false
-    Get-ChildItem -Filter 'cs2_overlay_*.exe' | ForEach-Object {
-        $controller_found = $true
-        LogMessage "Found controller: $($_.Name)"
-        if ($debug_mode -eq 1) { Write-Host "[DEBUG] Found controller: $($_.Name)" -ForegroundColor Cyan }
-        try {
-            Move-Item -Path $_.FullName -Destination (Join-Path $scriptDir "controller.exe") -Force -ErrorAction Stop | Out-Null
-        } catch {
-            if ($debug_mode -eq 1) { Write-Host "[DEBUG] Failed to move controller" -ForegroundColor Cyan }
-            Write-Host "  Error: Could not move controller file" -ForegroundColor Red
-            LogMessage "ERROR: Failed to move controller file"
-            Pop-Location
-            Remove-Item -Path $temp_dir -Recurse -Force -ErrorAction SilentlyContinue
+    foreach ($artifactSlug in $artifacts) {
+        $artifactInfo = Get-LatestArtifactVersion $artifactSlug
+        if ($null -ne $artifactInfo) {
+            Download-Artifact $artifactSlug $artifactInfo
+        } else {
+            Write-Host "Failed to get latest version info for $artifactSlug" -ForegroundColor Red
+            LogMessage "ERROR: Failed to get latest version info for $artifactSlug"
             exit 1
         }
     }
 
-    if (-not $controller_found) {
-        Write-Host "  Error: Controller file not found in package" -ForegroundColor Red
-        LogMessage "ERROR: Controller file not found in package"
-        if ($debug_mode -eq 1) { Write-Host "[DEBUG] No controller file found" -ForegroundColor Cyan }
-        Pop-Location
-        Remove-Item -Path $temp_dir -Recurse -Force -ErrorAction SilentlyContinue
-        exit 1
+    # Map artifact slugs to destination filenames
+    $artifactFileNames = @{
+        'driver-interface-kernel' = 'driver-interface-kernel.dll'
+        'cs2-overlay' = 'controller.exe'
+        'kernel-driver' = 'valthrun-driver.sys'
     }
 
-    # Remove radar files
-    Get-ChildItem -Filter '*radar*.exe' | ForEach-Object {
-        LogMessage "Removing radar file: $($_.Name)"
-        if ($debug_mode -eq 1) { Write-Host "[DEBUG] Removing radar file: $($_.Name)" -ForegroundColor Cyan }
-        Remove-Item -Path $_.FullName -Force -ErrorAction SilentlyContinue | Out-Null
-    }
+    foreach ($artifactSlug in $artifacts) {
+        $artifactInfo = Get-LatestArtifactVersion $artifactSlug
+        if ($null -ne $artifactInfo) {
+            $downloadedFile = Join-Path $scriptDir $artifactInfo.fileName
+            $destinationFile = Join-Path $scriptDir $artifactFileNames[$artifactSlug]
 
-    # Rename driver
-    $driver_found = $false
-    Get-ChildItem -Filter 'kernel_driver_*.sys' | ForEach-Object {
-        $driver_found = $true
-        LogMessage "Found driver: $($_.Name)"
-        if ($debug_mode -eq 1) { Write-Host "[DEBUG] Found driver: $($_.Name)" -ForegroundColor Cyan }
-        try {
-            Move-Item -Path $_.FullName -Destination (Join-Path $scriptDir "valthrun-driver.sys") -Force -ErrorAction Stop | Out-Null
-        } catch {
-            if ($debug_mode -eq 1) { Write-Host "[DEBUG] Failed to move driver" -ForegroundColor Cyan }
-            Write-Host "  Error: Could not move driver file" -ForegroundColor Red
-            LogMessage "ERROR: Failed to move driver file"
-            Pop-Location
-            Remove-Item -Path $temp_dir -Recurse -Force -ErrorAction SilentlyContinue
+            if (Test-Path $downloadedFile) {
+                # Move/Rename the file to the destination filename
+                try {
+                    Move-Item -Path $downloadedFile -Destination $destinationFile -Force
+                    LogMessage "Moved $downloadedFile to $destinationFile"
+                    if ($debug_mode -eq 1) { Write-Host "[DEBUG] Moved $downloadedFile to $destinationFile" -ForegroundColor Cyan }
+                } catch {
+                    Write-Host "  Error: Could not move $artifactSlug file" -ForegroundColor Red
+                    LogMessage "ERROR: Failed to move $artifactSlug file - $_"
+                    exit 1
+                }
+            } else {
+                Write-Host "Downloaded file $downloadedFile not found." -ForegroundColor Red
+                LogMessage "ERROR: Downloaded file $downloadedFile not found."
+                exit 1
+            }
+        } else {
+            Write-Host "Failed to get latest version info for $artifactSlug" -ForegroundColor Red
+            LogMessage "ERROR: Failed to get latest version info for $artifactSlug"
             exit 1
         }
     }
-
-    if (-not $driver_found) {
-        Write-Host "  Error: Driver file not found in package" -ForegroundColor Red
-        LogMessage "ERROR: Driver file not found in package"
-        if ($debug_mode -eq 1) { Write-Host "[DEBUG] No driver file found" -ForegroundColor Cyan }
-        Pop-Location
-        Remove-Item -Path $temp_dir -Recurse -Force -ErrorAction SilentlyContinue
-        exit 1
-    }
-
-    # Process interface DLL
-    $dll_found = $false
-    Get-ChildItem -Filter 'driver_interface_kernel_*.dll' | ForEach-Object {
-        $dll_found = $true
-        LogMessage "Found interface DLL: $($_.Name)"
-        if ($debug_mode -eq 1) { Write-Host "[DEBUG] Found interface DLL: $($_.Name)" -ForegroundColor Cyan }
-        $interface_dll = $_.Name
-        try {
-            Move-Item -Path $_.FullName -Destination (Join-Path $scriptDir $interface_dll) -Force -ErrorAction Stop | Out-Null
-        } catch {
-            if ($debug_mode -eq 1) { Write-Host "[DEBUG] Failed to move interface DLL" -ForegroundColor Cyan }
-            Write-Host "  Error: Could not move interface DLL" -ForegroundColor Red
-            LogMessage "ERROR: Failed to move interface DLL"
-            Pop-Location
-            Remove-Item -Path $temp_dir -Recurse -Force -ErrorAction SilentlyContinue
-            exit 1
-        }
-    }
-
-    if (-not $dll_found) {
-        Write-Host "  Warning: Interface DLL not found in package" -ForegroundColor Yellow
-        LogMessage "WARNING: Interface DLL not found in package"
-        if ($debug_mode -eq 1) { Write-Host "[DEBUG] No interface DLL found" -ForegroundColor Cyan }
-    }
-
-    Pop-Location
 
     # Download kdmapper
     Write-Host "  Downloading additional components..." -ForegroundColor White
@@ -333,19 +249,14 @@ function DownloadAndExtractFiles {
     if ($debug_mode -eq 1) { Write-Host "[DEBUG] Downloading kdmapper" -ForegroundColor Cyan }
     DownloadFile "https://github.com/valthrunner/Valthrun/releases/latest/download/kdmapper.exe" "kdmapper.exe"
 
-    # Clean up
-    if ($debug_mode -eq 1) { Write-Host "[DEBUG] Cleaning up temporary files" -ForegroundColor Cyan }
-    LogMessage "Cleaning up temporary files"
-    Remove-Item -Path $temp_dir -Recurse -Force -ErrorAction SilentlyContinue
-
     if ($debug_mode -eq 1) {
         Write-Host "[DEBUG] Final file verification:" -ForegroundColor Cyan
         Get-ChildItem -Path $scriptDir -Filter 'controller.exe','valthrun-driver.sys','kdmapper.exe' | ForEach-Object { Write-Host $_.Name -ForegroundColor Green }
     }
-    LogMessage "File extraction and processing completed"
+    LogMessage "File download and processing completed"
 
     Write-Host
-    Write-Host "  All files downloaded and extracted successfully!" -ForegroundColor Green
+    Write-Host "  All files downloaded and processed successfully!" -ForegroundColor Green
 }
 
 # Function to download files using WebClient
