@@ -1,21 +1,30 @@
 Clear-Host
 
+# Get the main folder from arguments
+$mainFolder = $args[1]
+
 # Define the script directory
-$scriptDir = Split-Path -Path $MyInvocation.MyCommand.Definition -Parent
+$scriptDir = $mainFolder
+
+# Define the logs directory
+$logDir = Join-Path $mainFolder "logs"
+if (!(Test-Path $logDir)) {
+    New-Item -ItemType Directory -Path $logDir | Out-Null
+}
 
 # Initialize timestamp and define log file names
 $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
 $new_latest_log = "latest_script_$timestamp.log"
 
 # Rename any existing latest_script_<timestamp>.log files to script_<timestamp>.log
-Get-ChildItem -Path $scriptDir -Filter 'latest_script_*.log' | ForEach-Object {
+Get-ChildItem -Path $logDir -Filter 'latest_script_*.log' | ForEach-Object {
     $old_latest_log = $_.Name
     $renamed_log = $old_latest_log -replace 'latest_', ''
     Rename-Item -Path $_.FullName -NewName $renamed_log -ErrorAction SilentlyContinue
 }
 
 # Set the current log file as the latest
-$logfile = Join-Path $scriptDir $new_latest_log
+$logfile = Join-Path $logDir $new_latest_log
 
 # Initialize WebClient for faster downloads
 $client = New-Object System.Net.WebClient
