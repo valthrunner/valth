@@ -64,11 +64,12 @@ switch ($firstArg) {
         Write-Host "  Downloading run.bat..."
         if ($debug_mode -eq 1) { Write-Host "[DEBUG] Attempting to download run.bat" }
         try {
-            $client.DownloadFile("https://github.com/valthrunner/Valthrun/releases/latest/download/run.bat", "run.bat")
+            $runBatPath = Join-Path $env:TEMP "run.bat"
+            $client.DownloadFile("https://github.com/valthrunner/Valthrun/releases/latest/download/run.bat", $runBatPath)
             LogMessage "run.bat download completed"
             if ($debug_mode -eq 1) { Write-Host "[DEBUG] Download complete." }
             # Call run.bat
-            Start-Process "run.bat"
+            Start-Process "cmd.exe" -ArgumentList "/c `"$runBatPath`"" -Verb RunAs
             exit
         } catch {
             Write-Host "  Failed to download run.bat."
@@ -112,7 +113,8 @@ function DownloadAndExtractFiles {
     LogMessage "Downloading controller package"
     if ($debug_mode -eq 1) { Write-Host "[DEBUG] Downloading controller package from valth.run" }
     try {
-        $client.DownloadFile("https://valth.run/download/cs2", Join-Path $temp_dir 'valthrun_cs2.zip')
+        $controllerZipPath = Join-Path $temp_dir "valthrun_cs2.zip"
+        $client.DownloadFile("https://valth.run/download/cs2", $controllerZipPath)
         $download_error = 0
     } catch {
         $download_error = 1
@@ -132,7 +134,8 @@ function DownloadAndExtractFiles {
     LogMessage "Downloading driver package"
     if ($debug_mode -eq 1) { Write-Host "[DEBUG] Downloading driver package from valth.run" }
     try {
-        $client.DownloadFile("https://valth.run/download/driver-kernel", Join-Path $temp_dir 'valthrun_driver_kernel.zip')
+        $driverZipPath = Join-Path $temp_dir "valthrun_driver_kernel.zip"
+        $client.DownloadFile("https://valth.run/download/driver-kernel", $driverZipPath)
         $download_error = 0
     } catch {
         $download_error = 1
@@ -160,7 +163,7 @@ function DownloadAndExtractFiles {
     LogMessage "Extracting controller package"
     if ($debug_mode -eq 1) { Write-Host "[DEBUG] Extracting controller package" }
     try {
-        Expand-Archive -LiteralPath (Join-Path $temp_dir 'valthrun_cs2.zip') -DestinationPath $temp_dir -Force
+        Expand-Archive -LiteralPath $controllerZipPath -DestinationPath $temp_dir -Force
         $extract_error = 0
     } catch {
         $extract_error = 1
@@ -182,7 +185,7 @@ function DownloadAndExtractFiles {
     LogMessage "Extracting driver package"
     if ($debug_mode -eq 1) { Write-Host "[DEBUG] Extracting driver package" }
     try {
-        Expand-Archive -LiteralPath (Join-Path $temp_dir 'valthrun_driver_kernel.zip') -DestinationPath $temp_dir -Force
+        Expand-Archive -LiteralPath $driverZipPath -DestinationPath $temp_dir -Force
         $extract_error = 0
     } catch {
         $extract_error = 1
